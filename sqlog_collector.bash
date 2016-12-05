@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Joey, <shiftcurrency@gmail.com>
 
 export LC_ALL=en_US.UTF-8
 export LANG=en_US.UTF-8
