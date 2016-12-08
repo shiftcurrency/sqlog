@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-export LC_ALL=en_US.UTF-8
-export LANG=en_US.UTF-8
-export LANGUAGE=en_US.UTF-8
 
 running=0
 logfile_to_parse="lisk.log"
@@ -42,7 +39,7 @@ running_status() {
 stop_collector() {
 
     ## It is safe to kill the process with "kill", it will do no harm to the SQLite database.
-    for i in $(ps aux |grep sqlog_collector.bash |awk {'print $2'}); do kill $i &> $sqlog_logfile; done
+    for i in $(ps aux |grep sqlog_collector |awk {'print $2'}); do kill $i &> $sqlog_logfile; done
 }
 
 start_collector() {
