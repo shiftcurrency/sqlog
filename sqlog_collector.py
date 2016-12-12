@@ -5,7 +5,6 @@ import os
 import sqlite3
 import ConfigParser
 import time
-from multiprocessing import Process
 
 class SQLogCollector(object):
 
@@ -87,22 +86,3 @@ class SQLogCollector(object):
         if len(log_dict) == 0:
             return None
         return log_dict
-
-    def start_collector(self):
-        try:
-            thd = Process(target=self.parser)
-            res = thd.start()
-            print "Start: %s" % res
-            return thd
-        except Exception as e:
-            print "Could not start collector daemon. Reason: %s" % e
-
-    def stop_collector(self, thd):
-        try:
-            """ Always return None, but lets check it anyway. """
-            if thd.terminate() == None:
-                while thd.is_alive():
-                    continue
-                return True
-        except Exception as e:
-            print "Could not stop collector daemon. Reason: %s" % e
