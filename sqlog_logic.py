@@ -25,10 +25,10 @@ class SQLog(object):
     def consensus_height(self):
 
         heights = []
-        ips = (self.config.get("general", "blockheight_nodes"))
+        ips = self.config.get("general", "blockheight_nodes")
 
-        for ip in ips:
-            url = 'http://' + str(ip) + ':' (self.config.get("general", "api_port")) + '/api/blocks/getHeight'
+        for ip in ips.split():
+            url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/blocks/getHeight"
             try:
                 http_req = requests.get(url)
                 res = http_req.json()
@@ -42,7 +42,7 @@ class SQLog(object):
             return heights[-1]
         return None
 
-    def blockheight_low(self, consensus_height, own_height):
+    def height_low(self, consensus_height, own_height):
 
         """ 
         Return values: 
@@ -70,10 +70,10 @@ class SQLog(object):
                 if res['syncing'] == True:
                     return True
         except Exception as e:
-            return None
+            print e
         return False
 
-    def own_blockheight(self):
+    def own_height(self):
 
         """ Return values: 
             height: as integer on success
@@ -88,7 +88,7 @@ class SQLog(object):
                 height = res['height']
                 return height
         except Exception as e:
-            return False
+            print e
         return None
 
     def restart(self):
@@ -99,7 +99,7 @@ class SQLog(object):
             if proc_status == 0:
                 return True
         except Exception as e:
-            pass
+            print e
         return False
 
     def rebuild(self):
@@ -150,3 +150,15 @@ class SQLog(object):
             print e
             return None
         return False
+
+    def stats_lines_parsed(self):
+
+        try:
+            sql = 'SELECT COUNT(severity) FROM logs'
+            self.c.execute(sql)
+            num_lines = self.c.fetchall()
+            if len(num_lines) >= 1:
+                print "Log lines parsed: %i" % num_lines[0]
+        except Exception as e:
+            pass
+
