@@ -21,6 +21,52 @@ class SQLog(object):
             self.c = self.conn_db.cursor()
         except Exception as e:
             print e
+            sys.exit(1)
+
+    def get_node_status(self, ip):
+        
+        url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/loader/status"
+        try:
+            http_req = requests.get(url)
+            res = http_req.json()
+        except Exception as e:
+            print "Could not fetch node status. Reason: %s" % e
+            return None
+
+        if 'success' in res and res['success'] == "true":
+            return res
+        return False
+
+    def get_rebuild_status(self):
+
+        try:
+            self.conn_db = self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
+            self.c = self.conn_db.cursor()
+            self.c.execute('SELECT rebuild FROM status')
+            res = self.c.fetchall()
+        except Exception as e:
+            print "Could not fetch rebuild status. Reason: %s" % e 
+            return None
+
+        if len(res) > 0:
+            if res[0][0] == "True":
+                return True
+        return False
+
+    def set_rebuild_status(self, status):
+
+        try:
+            self.conn_db = self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
+            self.c = self.conn_db.cursor()
+            self.c.execute('DELETE FROM status')
+            sql = "INSERT INTO status (rebuild) VALUES (\'%s\')" % self.status
+            self.c.execute(sql)
+            self.conn_db.commit()
+            self.conn_db.close()
+        except Exception as e:
+            print "Could not set rebuild status to True. Reason: %s" % e
+            return False
+        return True
  
     def consensus_height(self):
 
@@ -34,13 +80,13 @@ class SQLog(object):
                 res = http_req.json()
             except Exception as e:
                 pass
-            if 'success' in res and res['success']:
+            if 'success' in res and res['success'] and 'height' in res:
                 heights.append(res['height'])
 
         if len(heights) > 0:
             heights.sort()
             return heights[-1]
-        return None
+        return False
 
     def height_low(self, consensus_height, own_height):
 
@@ -70,7 +116,7 @@ class SQLog(object):
                 if res['syncing'] == True:
                     return True
         except Exception as e:
-            print e
+            pass
         return False
 
     def own_height(self):
@@ -88,7 +134,7 @@ class SQLog(object):
                 height = res['height']
                 return height
         except Exception as e:
-            print e
+            pass
         return None
 
     def restart(self):
@@ -99,7 +145,7 @@ class SQLog(object):
             if proc_status == 0:
                 return True
         except Exception as e:
-            print e
+            pass
         return False
 
     def rebuild(self):
@@ -121,8 +167,8 @@ class SQLog(object):
             True: Broadhash is lower than 51%
             None: Exception """
         try:
-            sql = 'select * from logs where log_string like \'%Broadhash%\' and log_string not like \'%100%\'' + \
-                'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-20 seconds\'))) < datetime order by datetime DESC LIMIT 1'
+            sql = 'SELECT * FROM logs WHERE log_string like \'%Broadhash%\' AND log_string NOT LIKE \'%100%\'' + \
+                'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-20 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
             self.c.execute(sql)
             res = self.c.fetchall()
             if len(res) >= 1 and len(res[0]) > 0:
@@ -131,6 +177,44 @@ class SQLog(object):
                     return True
         except Exception as e:
             return None
+        return False
+
+    def bad_memory_table(self):
+
+        try:
+            sql = 'SELECT * FROM logs WHERE log_string like \'%Recreating memory tables%\'' + \ 
+                    'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-30 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
+            self.c.execute(sql)
+            res = self.c.fetchall()
+            if len(res) == 0:
+                return False
+        except Exception as e:
+            print "Could not do bad memory check. Reason: %s" % e
+        return True
+
+    def failover(self):
+
+        if self.config.get("failover", "this_node") == 'primary':
+            ip = self.config.get("failover", "secondary_node")
+        elif self.config.get("failover", "this_node") == 'secondary':
+            ip = self.config.get("failover", "primary_node")
+            
+        try:
+            url = 'http://127.0.0.1:' + (self.config.get("general", "api_port")) + '/api/delegates/forging/disable'
+            data = {'secret': str(self.config.get("failover", "secret"))}
+            headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+            r = requests.post(url, data=json.dumps(data), headers=headers)
+            res = r.json()
+
+            if 'success' in res and res['success'] == "true":
+                url = 'http://' + str(ip) + ':' + (self.config.get("general", "api_port")) + '/api/delegates/forging/enable'
+                r = requests.post(url, data=json.dumps(data), headers=headers)
+                res = r.json()
+                if 'success' in res and res['success'] == "true":
+                    return True
+        except Exception as e:
+            print "Could not commit failover. Reason: %s" % e
+            return False
         return False
         
     def check_fork3(self):
@@ -147,7 +231,6 @@ class SQLog(object):
             if len(self.c.fetchall()) >= 1:
                 return True
         except Exception as e:
-            print e
             return None
         return False
 

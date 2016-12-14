@@ -15,7 +15,7 @@ class SQLogCollector(object):
         except Exception as e:
             print "Could read config.ini. Reason: %s" % e
             sys.exit(1)
-        if not self.create_database():
+        if not self.create_databases():
             sys.exit(1)
 
     def parser(self):
@@ -54,14 +54,29 @@ class SQLogCollector(object):
                     print "Could not insert the entry below. Reason: %s" % e
             return True
 
-    def create_database(self):
+    def create_databases(self):
 
         try:
+            """ This is the SQLOG logs database. """
             self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_db")))
+
+            """ This database is only for statistics. We create a new one because of "locking" problems. """
+            self.conn_db_stats = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
+            
+            """ Create the cursors for each database. """
             self.c = self.conn_db.cursor()
+            self.cs = self.conn_db_stats.cursor()
+            
             self.c.execute('CREATE TABLE IF NOT EXISTS logs (datetime TIMESTAMP, severity TEXT, log_string TEXT)')
+            self.cs.execute('CREATE TABLE IF NOT EXISTS status (rebuild TEXT)')
+            self.cs.execute('CREATE TABLE IF NOT EXISTS stats (type TEXT, datetime TIMESTAMP, block TEXT)')
+
+            """ Commit changes and close both databases """
             self.conn_db.commit()
             self.conn_db.close()
+            self.conn_db_stats.commit()
+            self.conn_db_stats.close()
+
         except Exception as e:
             print "Could not create database table. Reason: %s" % e
             return False
