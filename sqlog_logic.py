@@ -1,3 +1,4 @@
+import json
 import requests
 import subprocess
 import sys
@@ -23,9 +24,78 @@ class SQLog(object):
             print e
             sys.exit(1)
 
-    def get_node_status(self, ip):
+    def whos_forging(self):
         
-        url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/loader/status"
+        """ Return values:
+            string: forging node (primary or secondary)
+            False: Could not determine which node is forging.
+            None. Exception thrown. Could not set forging node. """
+        try:
+            self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
+            self.c = self.conn_db.cursor()
+
+            if self.forging(self.config.get("failover", "primary_node")):
+                self.c.execute('UPDATE status SET whos_forging = "primary"')
+                self.conn_db.commit()
+                self.conn_db.close()
+                print "Primary node(%s) is forging." % self.config.get("failover", "primary_node")
+                return "primary"
+            elif self.forging(self.config.get("failover", "secondary_node")):
+                self.c.execute('UPDATE status SET whos_forging = "secondary"')
+                self.conn_db.commit()
+                self.conn_db.close()
+                print "Secondary node(%s) is forging." % self.config.get("failover", "secondary_node")
+                return "secondary"
+        except Exception as e:
+            print "Could not set forging node. Reason: %s" % e
+            return None
+        return False
+
+    def forging(self, ip):
+
+        """ Argument: IP-address(string).
+            Return values:
+            True: IP-address with account is forging.
+            False: IP-address with account is not forging.
+            None: Exception thrown. """
+
+        url = "http://" + ip + ":" + self.config.get("general", "api_port") + \
+                "/api/accounts/getPublicKey?address=" + self.config.get("failover", "address")
+        try:
+            http_req = requests.get(url)
+            res = http_req.json()
+            if 'success' in res and res['success'] == True:
+                public_key = res['publicKey']
+        except Exception as e:
+            print "Could not get public key of account %s. Reason: %s" % \
+                (self.config.get("failover", "address"), e)
+            return None
+
+        url = "http://" + ip + ":" + self.config.get("general", "api_port") + \
+                "/api/delegates/forging/status?publicKey=" + public_key
+        try:
+            http_req = requests.get(url)
+            res = http_req.json()
+            if 'success' in res and res['success'] == True:
+                if res['enabled'] == True:
+                    return True
+        except Exception as e:
+            print e
+            print "Could not check if %s is forging with account %s" % \
+                (ip, self.config.get("failover", "address"))
+            return None
+        return False
+
+    def blockhain_loaded(self):
+
+        """ 
+        Return values: 
+        True: The blockchain is loaded.
+        False: The blockchain is not loaded.
+        None: Exception, we can not determine if the blockchain is loaded.
+        """
+        
+        url = "http://127.0.0.1:" + self.config.get("general", "api_port") + "/api/loader/status"
         try:
             http_req = requests.get(url)
             res = http_req.json()
@@ -33,11 +103,18 @@ class SQLog(object):
             print "Could not fetch node status. Reason: %s" % e
             return None
 
-        if 'success' in res and res['success'] == "true":
-            return res
+        if 'success' in res and res['success'] == True and 'loaded' in res and res['loaded'] == True:
+            return True
         return False
 
     def get_rebuild_status(self):
+
+        """ 
+        Return values: 
+        True: We have an on going blockchain rebuild.
+        False: We do not have an on going blockchain rebuild.
+        None: An exception as thrown. Can not determine a if we have an on going rebuild.
+        """
 
         try:
             self.conn_db = self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
@@ -55,11 +132,16 @@ class SQLog(object):
 
     def set_rebuild_status(self, status):
 
+        """ 
+        Return values: 
+        True: Successfully updated the database that we have an on going rebuild.
+        False: Could not update the database that we have an on going rebuild.
+        """
+
         try:
             self.conn_db = self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_stats_db")))
             self.c = self.conn_db.cursor()
-            self.c.execute('DELETE FROM status')
-            sql = "INSERT INTO status (rebuild) VALUES (\'%s\')" % self.status
+            sql = "UPDATE status SET rebuild = \'%s\'" % status
             self.c.execute(sql)
             self.conn_db.commit()
             self.conn_db.close()
@@ -69,6 +151,12 @@ class SQLog(object):
         return True
  
     def consensus_height(self):
+
+        """ 
+        Return values: 
+        Success: Blockheight as an integer
+        False: No values could be fetched.
+        """
 
         heights = []
         ips = self.config.get("general", "blockheight_nodes")
@@ -86,6 +174,7 @@ class SQLog(object):
         if len(heights) > 0:
             heights.sort()
             return heights[-1]
+            
         return False
 
     def height_low(self, consensus_height, own_height):
@@ -99,7 +188,7 @@ class SQLog(object):
         if consensus_height and own_height and \
             (int(own_height) <= int(consensus_height)-int(self.config.get("general", "block_offset"))):
             return True
-        return False
+        return True
 
     def syncing(self):
 
@@ -123,8 +212,8 @@ class SQLog(object):
 
         """ Return values: 
             height: as integer on success
-            None: if no result is returned
-            False: Exception """
+            False: if no result is returned
+            None: Exception, could not fetch own blockheight. """
 
         url = 'http://127.0.0.1:' + (self.config.get("general", "api_port")) + '/api/blocks/getHeight'
         try:
@@ -134,12 +223,12 @@ class SQLog(object):
                 height = res['height']
                 return height
         except Exception as e:
-            pass
-        return None
+            return None
+        return False
 
     def restart(self):
         try:
-            p = subprocess.Popen("/bin/bash", (self.config.get("paths", "management_script")), "reload",  stdout=subprocess.PIPE, shell=True)
+            p = subprocess.Popen(["/bin/bash", str(self.config.get("paths", "management_script")), "reload"],  stdout=subprocess.PIPE, shell=False)
             (output, err) = p.communicate()
             proc_status = p.wait()
             if proc_status == 0:
@@ -151,13 +240,14 @@ class SQLog(object):
     def rebuild(self):
 
         try:
-            p = subprocess.Popen("/bin/bash", (self.config.get("paths", "management_script")), "rebuild",  stdout=subprocess.PIPE, shell=True)
+            p = subprocess.Popen(["/bin/bash", str(self.config.get("paths", "management_script")), "rebuild"],  stdout=subprocess.PIPE, shell=False)
             (output, err) = p.communicate()
-            proc_status = p.wait()    
+            proc_status = p.wait()
             if proc_status == 0:
                 return True
         except Exception as e:
-            pass
+            print e
+            return None
         return False
 
     def check_broadhash(self):
@@ -181,8 +271,15 @@ class SQLog(object):
 
     def bad_memory_table(self):
 
+        """ Return values:
+            False: We did not find a bad memory table rebuild within the last 30 seconds.
+            True: We found a bad memory table. """
+
+        """ If LISK/SHIFT finds e.g. an orphaned block, the database has to be rebuild from block 0. This takes too long.
+            We should therefore initiate a rebuild and do a failover instead. """
+
         try:
-            sql = 'SELECT * FROM logs WHERE log_string like \'%Recreating memory tables%\'' + \ 
+            sql = 'SELECT * FROM logs WHERE log_string like \'%Recreating memory tables%\'' + \
                     'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-30 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
             self.c.execute(sql)
             res = self.c.fetchall()
@@ -194,27 +291,35 @@ class SQLog(object):
 
     def failover(self):
 
+        """ Return values:
+            True: Disabled forging on local node, enabled forging on remote node.
+            False: Could not disable forging on local node or enable forging on remote node.
+            None: Exception thrown. """
+
         if self.config.get("failover", "this_node") == 'primary':
             ip = self.config.get("failover", "secondary_node")
         elif self.config.get("failover", "this_node") == 'secondary':
             ip = self.config.get("failover", "primary_node")
             
         try:
+            data = {"secret": str(self.config.get("failover", "secret"))}
+            headers = {'Content-Type': 'application/json'}
+
             url = 'http://127.0.0.1:' + (self.config.get("general", "api_port")) + '/api/delegates/forging/disable'
-            data = {'secret': str(self.config.get("failover", "secret"))}
-            headers = {'Content-type': 'application/json', 'Accept': 'text/plain'}
             r = requests.post(url, data=json.dumps(data), headers=headers)
             res = r.json()
 
-            if 'success' in res and res['success'] == "true":
+            if 'success' in res and res['success'] == True:
+                print "Forging disabled on the local node (127.0.0.1)."
                 url = 'http://' + str(ip) + ':' + (self.config.get("general", "api_port")) + '/api/delegates/forging/enable'
                 r = requests.post(url, data=json.dumps(data), headers=headers)
                 res = r.json()
-                if 'success' in res and res['success'] == "true":
+                if 'success' in res and res['success'] == True:
+                    print "Forging enabled on remote node (%s)" % str(ip)
                     return True
         except Exception as e:
             print "Could not commit failover. Reason: %s" % e
-            return False
+            return None
         return False
         
     def check_fork3(self):
@@ -222,7 +327,7 @@ class SQLog(object):
         """ Return values:
         False: No fork type 3 detected within the specific time frame. 
         True: There was a fork type 3 within the specific timeframe
-        None: Exception """
+        None: Exception, we can not determine if a fork type 3 occurred. """
 
         try:
             sql = 'SELECT * FROM logs WHERE log_string LIKE \'%Fork%\' AND log_string LIKE \'%"cause":3%\' AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\',' + \
@@ -234,13 +339,19 @@ class SQLog(object):
             return None
         return False
 
-    def stats_lines_parsed(self):
+    def stats(self):
 
         try:
             sql = 'SELECT COUNT(severity) FROM logs'
             self.c.execute(sql)
             num_lines = self.c.fetchall()
             if len(num_lines) >= 1:
+                self.whos_forging()
+                own_height = self.own_height()
+                con_height = self.consensus_height()
+                if own_height and con_height:
+                    print "Local blockchain height: %s; Consensus blockchain height: %s." % \
+                        (own_height, con_height)
                 print "Log lines parsed: %i" % num_lines[0]
         except Exception as e:
             pass

@@ -68,7 +68,7 @@ class SQLogCollector(object):
             self.cs = self.conn_db_stats.cursor()
             
             self.c.execute('CREATE TABLE IF NOT EXISTS logs (datetime TIMESTAMP, severity TEXT, log_string TEXT)')
-            self.cs.execute('CREATE TABLE IF NOT EXISTS status (rebuild TEXT)')
+            self.cs.execute('CREATE TABLE IF NOT EXISTS status (rebuild TEXT, whos_forging TEXT)')
             self.cs.execute('CREATE TABLE IF NOT EXISTS stats (type TEXT, datetime TIMESTAMP, block TEXT)')
 
             """ Commit changes and close both databases """
