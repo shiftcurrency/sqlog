@@ -13,7 +13,8 @@ class SQLogCollector(object):
         try:
             self.config.read('config.ini')
         except Exception as e:
-            print "Could read config.ini. Reason: %s" % e
+            log = "Could read config.ini. Reason: %s" % e
+            logic.logger(log)
             sys.exit(1)
         if not self.create_databases():
             sys.exit(1)
@@ -51,7 +52,10 @@ class SQLogCollector(object):
                     sql = "INSERT OR IGNORE INTO logs (datetime, severity, log_string) VALUES (\'%s\', \'%s\', \'%s\')" % (d, sev, log)
                     self.c.execute(sql)
                 except Exception as e:
-                    print "Could not insert the entry below. Reason: %s" % e
+                    from sqlog_logic import SQLog
+                    logic = SQLog()
+                    log = "Could not insert the entry below. Reason: %s" % e
+                    logic.logger(log)
             return True
 
     def create_databases(self):
@@ -73,12 +77,15 @@ class SQLogCollector(object):
 
             """ Commit changes and close both databases """
             self.conn_db.commit()
-            self.conn_db.close()
             self.conn_db_stats.commit()
+            self.conn_db.close()
             self.conn_db_stats.close()
 
         except Exception as e:
-            print "Could not create database table. Reason: %s" % e
+            log = "Could not create database table. Reason: %s" % e
+            from sqlog_logic import SQLog
+            logic = SQLog()
+            logic.logger(log)
             return False
         return True
 

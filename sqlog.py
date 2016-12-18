@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 import time
+import sys
 from sqlog_logic import SQLog
 from multiprocessing import Process
 from sqlog_collector import SQLogCollector 
@@ -8,7 +9,6 @@ from sqlog_collector import SQLogCollector
 def start_collector():
 
     collector = SQLogCollector()
-
     try:
         thd = Process(target=collector.parser)
         res = thd.start()
@@ -16,9 +16,10 @@ def start_collector():
             return thd 
         return False
     except Exception as e:
-        print "Could not start collector daemon. Reason: %s" % e 
+        print "Could not start collector daemon. Reason: %s" % e
 
 def stop_collector(thd):
+
     try:
         """ Always return None, but lets check it anyway. """
         if thd.terminate() == None:
@@ -28,73 +29,107 @@ def stop_collector(thd):
     except Exception as e:
         print "Could not stop collector daemon. Reason: %s" % e
 
+def low_broadhash():
+
+    """ 1. Check if we have detected a fork within the time offset in config.ini.
+        2. Check that the blockchain is not syncing from a recent rebuild.
+        3. Check that the blockchain is loaded completely. """
+    if logic.check_broadhash() == "secondary" and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded():
+        logic.logger("Broadhash under 51%, commit failover.")
+        if logic.failover("secondary"):
+            return True
+    return False
+
+def primary_takeover():
+
+    """ Always make sure that the primary node is active if everything is OK. """
+    if not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded() \
+        and logic.check_broadhash() == "primary" and not logic.check_fork3() and not logic.height_low():
+        """ Everything is OK at primary node. """
+        if logic.failover("primary"):
+            return True
+    return False
+
+def bad_db_rebuild():
+
+    """ 1. Check if we have detected a fork within the time offset in config.ini.
+        2. Check that the blockchain is not syncing from a recent rebuild.
+        3. Check that the blockchain is loaded completely. """
+    if logic.bad_memory_table() and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded():
+        """ 1. Set rebuild status to True
+            2. Commit a fail over. """
+        if logic.set_rebuild_status("True") and logic.failover("secondary"):
+            logic.logger("Faulty database detected, rebuilding blockchain.")
+            if logic.run_script("rebuild"):
+                logic.logger("Blockchain rebuild finished.")
+                if logic.syncing():
+                    logic.logger("Syncing blockchain.")
+                return True
+    return False
+
+
 def check_fork():
 
-    logic = SQLog()
-
-    """ Check for fork type 3. If found, rebuild the blockchain."""
-    if logic.check_fork3() and not logic.syncing() and not logic.get_rebuild_status() \
-        and logic.blockchain_loaded():
-        print "Fork type 3 detected, rebuilding..."
-        if logic.set_rebuild_status("True"):
-            if logic.rebuild():
-                print "Rebuilt blockchain."
+    """ 1. Check if we have detected a fork within the time offset in config.ini.
+        2. Check that the blockchain is not syncing from a recent rebuild.
+        3. Check that the blockchain is loaded completely. """
+    if logic.check_fork3() and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded():
+        """ 1. Set rebuild status to True
+            2. Commit a fail over. """
+        if logic.set_rebuild_status("True") and logic.failover("secondary"):
+            logic.logger("Fork type 3 detected, rebuilding blockchain.")
+            if logic.run_script("rebuild"):
+                logic.logger("Blockchain rebuild finished.")
+                if logic.syncing():
+                    logic.logger("Syncing blockchain.")
                 return True
     return False
 
 def check_height():
 
-    logic = SQLog()
-    c_height = logic.consensus_height()
-    own_height = logic.own_height()
-
-    if c_height and own_height:
-        """ 1. Check if blockchain height is too low.
-            2. Check that there is not on going rebuild.
-            3. Check that the blockchain is not syncing. If its not syncing, we can do a rebuild.
-        """
-        if logic.height_low(c_height, own_height) and not logic.get_rebuild_status() \
-            and not logic.syncing():
-            """ Set rebuild status to True since we will do a rebuild. """
-            if logic.set_rebuild_status("True"):
-                print "Own (%s) blockheight is low compared to consensus(%s), rebuilding..." \
+    """ 1. Check if we have detected a fork within the time offset in config.ini.
+        2. Check that the blockchain is not syncing from a recent rebuild.
+        3. Check that the blockchain is loaded completely. """
+    if logic.height_low() and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded():
+        """ 1. Set rebuild status to True
+            2. Commit a fail over. """
+        if logic.set_rebuild_status("True") and logic.failover("secondary"):
+            log = "Own (%s) blockheight is low compared to consensus(%s), rebuilding blockchain." \
                     % (str(own_height), str(c_height))
-                """ Activate forging on the other node. """
-                if logic.failover():
-                    """ If the failover/forging was set on the other node, rebuild. """
-                    if logic.rebuild():
-                        print "Rebuilt blockchain."
-                        return True
+            logic.logger(log)
+            if logic.run_script("rebuild"):
+                logic.logger("Blockchain rebuild finished.")
+                if logic.syncing():
+                    logic.logger("Syncing blockchain.")
+                return True
     return False
 
 def main():
-
     try:
-        logic = SQLog()
+        counter=0
         collector_thread = start_collector()
-
         if collector_thread:
-            print "SQLog collector started."
-            counter=0
+            logic.logger("SQLog collector started.")
+            if not logic.syncing(): logic.stats()
             while True:
-
-                """ Check for fork type 3. If found, rebuild the blockchain."""
-                check_fork()
-
-                """ Compare consensus blockchain height with own height. If out of sync rebuild. """
-                if check_height():
-                    """ The rebuild was successfull, set rebuild status to False in database """
-                    logic.set_rebuild_status("False")
-
-                if (counter % 1000) == 0:
-                    if logic.stats():
-                        print logic.stats()
                 counter+=1
+                if (counter % 300) == 0:
+                    if not logic.syncing(): logic.stats()
+                if check_height():
+                    logic.set_rebuild_status("False")
+                if check_fork():
+                    logic.set_rebuild_status("False")
+                if low_broadhash():
+                    """ No rebuild needed. We do not set rebuild status. Continue. """
+                    continue
+                if primary_takeover():
+                    """ No rebuild needed. We do not set rebuild status. Continue. """
+                    continue
                 time.sleep(3)
-                    
     except (KeyboardInterrupt, SystemExit):
         if stop_collector(collector_thread):
-            print "SQLog collector stopped."
+            logic.logger("SQLog collector stopped.")
 
 if __name__ == "__main__":
+    logic = SQLog()
     main()
