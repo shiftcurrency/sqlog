@@ -41,7 +41,6 @@ class SQLog(object):
             return False
         return False
 
-
     def forging(self, ip):
 
         """ Argument: IP-address(string).
