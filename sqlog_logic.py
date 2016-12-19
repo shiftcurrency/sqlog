@@ -246,25 +246,35 @@ class SQLog(object):
 
     def check_broadhash(self):
 
-        """ Return values:
-            False: broadhash consensus is bigger or equal to 51%
-            True: Broadhash is lower than 51%
-            None: Exception """
-        try:
-            sql = 'SELECT * FROM logs WHERE log_string like \'%Broadhash%\' ORDER BY datetime DESC LIMIT 1'
-            self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_db")))
-            self.c = self.conn_db.cursor()
-            self.c.execute(sql)
-            res = self.c.fetchall()
-            if len(res) >= 1 and len(res[0]) > 0:
-                consensus = int(re.search(r'\d+', str(res[0][2])).group())
-                if int(consensus) < 51:
-                    return "secondary"
-                else: return "primary"
-        except Exception as e:
-            print e
-            return None
+        if self.config.get("failover", "primary_node") and self.config.get("failover", "secondary_node"):
+            url = 'http://' + self.config.get("failover", "primary_node") + ":" + (self.config.get("general", "api_port")) \
+                + '/api/loader/status/sync'
+            try:
+                http_req = requests.get(url)
+                res = http_req.json()
+                if 'success' in res and res['success'] == True and 'consensus' in res:
+                    primary_broadhash_consensus = int(res['consensus'])
+            except Exeption as e:
+                print e
+                return None
+
+            url = 'http://' + self.config.get("failover", "secondary_node") + ":" + (self.config.get("general", "api_port")) \
+                + '/api/loader/status/sync'
+            try:
+                http_req = requests.get(url)
+                res = http_req.json()
+                if 'success' in res and res['success'] == True and 'consensus' in res:
+                    secondary_broadhash_consensus = int(res['consensus'])
+            except Exception as e:
+                print e
+                return None
+
+            if secondary_broadhash_consensus and primary_broadhash_consensus and \
+                (primary_broadhash_consensus < secondary_broadhash_consensus) and \
+                    self.forging(config.get("failover", "primary_node")):
+                    return True
         return False
+
 
     def bad_memory_table(self):
 

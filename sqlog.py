@@ -35,19 +35,18 @@ def low_broadhash():
     """ 1. Check if we have detected a fork within the time offset in config.ini.
         2. Check that the blockchain is not syncing from a recent rebuild.
         3. Check that the blockchain is loaded completely. """
-    if logic.check_broadhash() == "secondary" and not logic.syncing() and not logic.get_rebuild_status() \
-        and logic.blockchain_loaded() and not logic.forging(config.get("failover", "secondary_node")):
-        if config.get("failover", "this_node") == "primary":
-            logic.logger("Broadhash under 51%, commit failover.")
-            if logic.failover("secondary"):
-                return True
+
+    if logic.check_broadhash() and config.get("failover", "this_node") == "primary":
+        if logic.failover("secondary"):
+            logic.logger("Broadhash consensus on secondary node is higher than on primary node. Commit failover.")
+            return True
     return False
 
 def primary_takeover():
 
     """ Always make sure that the primary node is active if everything is OK. """
     if not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded() \
-        and logic.check_broadhash() == "primary" and not logic.check_fork3() and not logic.height_low() \
+        and not logic.check_broadhash() and not logic.check_fork3() and not logic.height_low() \
         and not logic.forging(config.get("failover", "primary_node")):
         """ Everything is OK at primary node. """
         if config.get("failover", "this_node") == "primary":
