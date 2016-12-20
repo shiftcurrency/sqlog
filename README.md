@@ -1,4 +1,4 @@
-## LISK/SHIFT monitoring software.
+## LISK/SHIFT monitoring software (Only LISK right now).
 
 SQLog works as a monitoring software for LISK/SHIFT with a failover system. It also parse logs and inserts them into a SQLite3 database, hence the name SQLog. Since it uses a SQL-database as backend, it is very easy to create new events and actions.
 
@@ -27,6 +27,8 @@ SQLog enables high availability for LISK/SHIFT nodes. It can handle the followin
 3. `Configure config.ini` in the sqlog directory. The configuration file is documented. OBSERVE, make sure you choose one server to be primary and one server to be secondary.
 
 4. Start the software (in screen or similar) by executing sqlog.py, such as: ./sqlog.py
+
+5. Make sure you white list the primary/secondary node IP-address in config.json for LISK/SHIFT as well as 127.0.0.1 on BOTH nodes.
 
 ## License
 
