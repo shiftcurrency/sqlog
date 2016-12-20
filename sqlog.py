@@ -30,6 +30,15 @@ def stop_collector(thd):
     except Exception as e:
         print "Could not stop collector daemon. Reason: %s" % e
 
+def node_running(node):
+
+    if node == "primary" and not logic.node_running(config.get("failover", "primary_node")):
+        return False
+    elif node == "secondary" and not logic.node_running(config.get("failover", "secondary_node")):
+        return False
+    else:
+        return True
+
 def low_broadhash():
 
     """ 1. Check if we have detected a fork within the time offset in config.ini.
@@ -126,18 +135,26 @@ def main():
                 counter+=1
                 if (counter % 300) == 0:
                     if not logic.syncing(): logic.stats()
-                if check_height():
-                    logic.set_rebuild_status("False")
-                if check_fork():
-                    logic.set_rebuild_status("False")
-                if bad_db_rebuild():
-                    logic.set_rebuild_status("False")
-                if low_broadhash():
-                    """ No rebuild needed. We do not set rebuild status. Continue. """
-                    continue
-                if primary_takeover():
-                    """ No rebuild needed. We do not set rebuild status. Continue. """
-                    continue
+                if not node_running(config.get("failover", "this_node")):
+                    logic.logger("Node software on localhost is not running, trying to start it...")
+                    if config.get("failover", "this_node") == "primary":
+                        logic.failover("secondary")
+                    if logic.run_script("start"):
+                        logic.logger("Node started on localhost.")
+                        continue
+                else:
+                    if check_height():
+                        logic.set_rebuild_status("False")
+                    if check_fork():
+                        logic.set_rebuild_status("False")
+                    if bad_db_rebuild():
+                        logic.set_rebuild_status("False")
+                    if low_broadhash():
+                        """ No rebuild needed. We do not set rebuild status. Continue. """
+                        continue
+                    if primary_takeover():
+                        """ No rebuild needed. We do not set rebuild status. Continue. """
+                        continue
                 time.sleep(3)
     except (KeyboardInterrupt, SystemExit):
         if stop_collector(collector_thread):

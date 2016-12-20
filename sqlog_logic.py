@@ -25,13 +25,12 @@ class SQLog(object):
                 format='[%(asctime)s] [%(levelname)s] %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
         logging.info(log_string)
         
-    def node_running(self):
+    def node_running(self, ip):
         
         """ Return values:
             True: Node is running.
             False: Node is not running. """
-
-        url = "http://127.0.0.1:" + self.config.get("general", "api_port") + "/api/blocks/getFee"
+        url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/blocks/getFee"
         try:
             http_req = requests.get(url)
             res = http_req.json()
