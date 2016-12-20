@@ -36,7 +36,8 @@ def low_broadhash():
         2. Check that the blockchain is not syncing from a recent rebuild.
         3. Check that the blockchain is loaded completely. """
 
-    if logic.check_broadhash() and config.get("failover", "this_node") == "primary":
+    if logic.check_broadhash() and config.get("failover", "this_node") == "primary" \
+            and logic.forging(config.get("failover", "primary_node")):
         if logic.failover("secondary"):
             logic.logger("Broadhash consensus on secondary node is higher than on primary node. Commit failover.")
             return True
@@ -45,11 +46,12 @@ def low_broadhash():
 def primary_takeover():
 
     """ Always make sure that the primary node is active if everything is OK. """
-    if not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded() \
-        and not logic.check_broadhash() and not logic.check_fork3() and not logic.height_low() \
+    if not logic.check_broadhash() and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded() \
+        and not logic.check_fork3() and not logic.height_low() \
         and not logic.forging(config.get("failover", "primary_node")):
         """ Everything is OK at primary node. """
         if config.get("failover", "this_node") == "primary":
+            logic.logger("Primary node OK, taking over.")
             if logic.failover("primary"):
                 return True
     return False
@@ -59,16 +61,15 @@ def bad_db_rebuild():
     """ 1. Check if we have detected a fork within the time offset in config.ini.
         2. Check that the blockchain is not syncing from a recent rebuild.
         3. Check that the blockchain is loaded completely. """
-    if logic.bad_memory_table() and not logic.syncing() and not logic.get_rebuild_status() and logic.blockchain_loaded():
-        """ 1. Set rebuild status to True
-            2. Commit a fail over. """
-        if logic.set_rebuild_status("True") and logic.failover("secondary"):
-            logic.logger("Faulty database detected, rebuilding blockchain.")
-            if logic.run_script("rebuild"):
-                logic.logger("Blockchain rebuild finished.")
-                if logic.syncing():
-                    logic.logger("Syncing blockchain.")
-                return True
+    if logic.bad_memory_table() and not logic.get_rebuild_status() and logic.set_rebuild_status("True"):
+        if config.get("failover", "this_node") == "primary" and logic.forging(config.get("failover", "primary_node")):
+            logic.failover("secondary")
+        logic.logger("Faulty database detected, rebuilding blockchain.")
+        if logic.run_script("rebuild"):
+            logic.logger("Blockchain rebuild finished.")
+            if logic.syncing():
+                logic.logger("Syncing blockchain.")
+            return True
     return False
 
 
@@ -128,6 +129,8 @@ def main():
                 if check_height():
                     logic.set_rebuild_status("False")
                 if check_fork():
+                    logic.set_rebuild_status("False")
+                if bad_db_rebuild():
                     logic.set_rebuild_status("False")
                 if low_broadhash():
                     """ No rebuild needed. We do not set rebuild status. Continue. """

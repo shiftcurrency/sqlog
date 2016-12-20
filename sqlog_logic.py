@@ -63,8 +63,10 @@ class SQLog(object):
         try:
             http_req = requests.get(url)
             res = http_req.json()
-            if 'success' in res and res['success'] == True:
+            if 'success' in res and res['success'] == True and 'publicKey' in res:
                 public_key = res['publicKey']
+            else:
+                return None
         except Exception as e:
             log = "Could not get public key of account %s. Reason: %s" % \
                 (self.config.get("failover", "address"), e)
@@ -254,7 +256,7 @@ class SQLog(object):
                 res = http_req.json()
                 if 'success' in res and res['success'] == True and 'consensus' in res:
                     primary_broadhash_consensus = int(res['consensus'])
-            except Exeption as e:
+            except Exception as e:
                 print e
                 return None
 
@@ -269,10 +271,8 @@ class SQLog(object):
                 print e
                 return None
 
-            if secondary_broadhash_consensus and primary_broadhash_consensus and \
-                (primary_broadhash_consensus < secondary_broadhash_consensus) and \
-                    self.forging(config.get("failover", "primary_node")):
-                    return True
+            if (primary_broadhash_consensus < secondary_broadhash_consensus):
+                return True
         return False
 
 
@@ -288,7 +288,7 @@ class SQLog(object):
         """ Rebuilding blockchain, current block height: 1 """
         try:
             sql = 'SELECT * FROM logs WHERE log_string like \'%Rebuilding blockchain, current block height%\'' + \
-                    'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-18 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
+                    'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-30 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
             self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_db")))
             self.c = self.conn_db.cursor()
             self.c.execute(sql)
@@ -298,6 +298,7 @@ class SQLog(object):
         except Exception as e:
             log = "Could not do bad memory check. Reason: %s" % e
             self.logger(log)
+            return None
         return True
 
     def failover(self, node):
