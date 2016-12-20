@@ -1,6 +1,6 @@
 ## LISK/SHIFT monitoring software.
 
-SQLog works as a monitoring software for LISK/SHIFT with a failover system. It also parse logs and inserts them into a SQLite3 database, hence the name SQLog.
+SQLog works as a monitoring software for LISK/SHIFT with a failover system. It also parse logs and inserts them into a SQLite3 database, hence the name SQLog. Since it uses a SQL-database as backend, it is very easy to create new events and actions.
 
 ## Supported events
 
