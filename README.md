@@ -19,12 +19,12 @@ SQLog enables high availability for LISK/SHIFT nodes. It can handle the followin
 
 ## Installation
 
-1. git clone https://github.com/shiftcurrency/sqlog.git
+1. `git clone https://github.com/shiftcurrency/sqlog.git`
 
 2. Install python requests by using either python pip or apt (on debian based systems such as ubuntu).
-   apt-get install python-requests or pip install requests
+   `apt-get install python-requests` or `pip install requests`
 
-3. Configure config.ini in the sqlog directory. The configuration file is documented. OBSERVE, make sure you choose one server to be primary and one server to be secondary.
+3. `Configure config.ini` in the sqlog directory. The configuration file is documented. OBSERVE, make sure you choose one server to be primary and one server to be secondary.
 
 4. Start the software (in screen or similar) by executing sqlog.py, such as: ./sqlog.py
 
