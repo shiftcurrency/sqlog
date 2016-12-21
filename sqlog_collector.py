@@ -33,7 +33,7 @@ class SQLogCollector(object):
             where = file.tell()
             line = file.readline()
             if not line:
-                time.sleep(0.2)
+                time.sleep(1)
                 file.seek(where)
             else:
                 log_dict = self.get_log_dict(line)

@@ -6,6 +6,7 @@ import ConfigParser
 from sqlog_logic import SQLog
 from multiprocessing import Process
 from sqlog_collector import SQLogCollector 
+from sqlog_notifications import Email
 
 def start_collector():
 
@@ -33,9 +34,13 @@ def stop_collector(thd):
 def node_running(node):
 
     if node == "primary" and not logic.node_running(config.get("failover", "primary_node")):
+        if config.get("notifications", "enable_email"):
+            res = mail.send_email("Primary node is down.")
         return False
     elif node == "secondary" and not logic.node_running(config.get("failover", "secondary_node")):
-        return False
+       if config.get("notifications", "enable_email"):
+            res = mail.send_email("Secondary node is down.")
+            return False
     else:
         return True
 
@@ -73,7 +78,10 @@ def bad_db_rebuild():
     if logic.bad_memory_table() and not logic.get_rebuild_status() and logic.set_rebuild_status("True"):
         if config.get("failover", "this_node") == "primary" and logic.forging(config.get("failover", "primary_node")):
             logic.failover("secondary")
-        logic.logger("Faulty database detected, rebuilding blockchain.")
+        log = "Faulty database detected, rebuilding blockchain."
+        logic.logger(log)
+        if config.get("notifications", "enable_email"):
+            res = mail.send_email(log)
         if logic.run_script("rebuild"):
             logic.logger("Blockchain rebuild finished.")
             if logic.syncing():
@@ -94,7 +102,10 @@ def check_fork():
         if logic.set_rebuild_status("True"):
             if config.get("failover", "this_node") == "primary":
                 logic.failover("secondary")
-            logic.logger("Fork type 3 detected, rebuilding blockchain.")
+            log = "Fork type 3 detected, rebuilding blockchain."
+            logic.logger(log)
+            if config.get("notifications", "enable_email"):
+                res = mail.send_email(log)
             if logic.run_script("rebuild"):
                 logic.logger("Blockchain rebuild finished.")
                 if logic.syncing():
@@ -116,6 +127,8 @@ def check_height():
             if logic.set_rebuild_status("True"):
                 log = "Own blockheight is %s blocks low compared to consensus, rebuilding blockchain." \
                     % (str(config.get("general", "block_offset")))
+                if config.get("notifications", "enable_email"):
+                    res = mail.send_email(log)
                 logic.logger(log)
                 if logic.run_script("rebuild"):
                     logic.logger("Blockchain rebuild finished.")
@@ -133,6 +146,7 @@ def main():
             if not logic.syncing(): logic.stats()
             while True:
                 counter+=1
+                time.sleep(15)
                 if (counter % 300) == 0:
                     if not logic.syncing(): logic.stats()
                 if not node_running(config.get("failover", "this_node")):
@@ -155,17 +169,18 @@ def main():
                     if primary_takeover():
                         """ No rebuild needed. We do not set rebuild status. Continue. """
                         continue
-                time.sleep(3)
     except (KeyboardInterrupt, SystemExit):
         if stop_collector(collector_thread):
             logic.logger("SQLog collector stopped.")
 
 if __name__ == "__main__":
     config = ConfigParser.RawConfigParser()
+    logic = SQLog()
+    mail = Email()
     try:
         config.read('config.ini')
     except Exception as e:
-        print "Could read config.ini. Reason: %s" % e
+        log = "Could read config.ini. Reason: %s" % e
+        logic.logger(log)
         sys.exit(1)
-    logic = SQLog()
     main()

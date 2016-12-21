@@ -77,7 +77,6 @@ class SQLog(object):
         try:
             http_req = requests.get(url)
             res = http_req.json()
-
             if 'success' in res and res['success'] == True:
                 if res['enabled'] == True:
                     if ip == self.config.get("failover", "primary_node"):
@@ -370,8 +369,6 @@ class SQLog(object):
             self.c.execute(sql)
             num_lines = self.c.fetchall()
 
-
-
             if len(num_lines) >= 1:
                 if self.forging(self.config.get("failover", "primary_node")):
                     log = "Primary node(%s) is forging." % self.config.get("failover", "primary_node")
@@ -389,3 +386,8 @@ class SQLog(object):
         except Exception as e:
             self.logger("Could not fetch number of lines parsed for statistics.")
         return True
+
+    def mail(self):
+
+        if self.forging(self.config.get("notifications", "enable_email")):
+            import smtplib        

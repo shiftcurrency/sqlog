@@ -11,10 +11,10 @@ SQLog enables high availability for LISK/SHIFT nodes. It can handle the followin
 | Event       | Action          |
 | ------------- |:-------------:|
 | Local node software is not running. | Try to start the local node software.|
-| The node blockheight is low compared to network consensus | Failover and rebuild.|
-| The node experienced a fork of type 3 | Failover and rebuild.|
+| The node blockheight is low compared to network consensus | Failover and rebuild. Sends email if enabled.|
+| The node experienced a fork of type 3 | Failover and rebuild. Sends email if enabled.|
 |Broadhash consensus is either higher or lower than primary/secondary node|Failover|
-|The blockchain database is corrupted|Failover and rebuild.|
+|The blockchain database is corrupted|Failover and rebuild. Sends email if enabled.|
 
 ## Installation
 
