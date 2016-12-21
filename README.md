@@ -29,6 +29,10 @@ SQLog enables high availability for LISK/SHIFT nodes. It can handle the followin
 
 5. Make sure you white list the primary/secondary node IP-address in config.json for LISK/SHIFT as well as 127.0.0.1 on BOTH nodes.
 
+## The End
+
+If you like my work you can give my delegate a vote (joey on LISK) or give me a small contribution at 3791057246258751384L.
+
 ## License
 
     <SQLog, SHIFT/LISK monitoring system>
