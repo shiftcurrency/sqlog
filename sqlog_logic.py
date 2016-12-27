@@ -32,13 +32,13 @@ class SQLog(object):
             False: Node is not running. """
         url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/blocks/getFee"
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
             if 'success' in res:
                 return True
         except Exception as e:
             return False
-        return False
+        return True
 
     def forging(self, ip):
 
@@ -55,27 +55,24 @@ class SQLog(object):
         except Exception as e:
             log = "Could not interact with status database. Reason: %s" % e
             self.logger(log)
-            return None
+            return False
 
         url = "http://" + ip + ":" + self.config.get("general", "api_port") + \
                 "/api/accounts/getPublicKey?address=" + self.config.get("failover", "address")
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
             if 'success' in res and res['success'] == True and 'publicKey' in res:
                 public_key = res['publicKey']
             else:
-                return None
+                return False
         except Exception as e:
-            log = "Could not get public key of account %s. Reason: %s" % \
-                (self.config.get("failover", "address"), e)
-            self.logger(log)
-            return None
+            return False
 
         url = "http://" + ip + ":" + self.config.get("general", "api_port") + \
                 "/api/delegates/forging/status?publicKey=" + public_key
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
             if 'success' in res and res['success'] == True:
                 if res['enabled'] == True:
@@ -88,7 +85,6 @@ class SQLog(object):
             log = "Could not get or check forging status of node %s for address %s. Reason: %s" % \
                 (ip, self.config.get("failover", "address"), e)
             self.logger(log)
-            return None
         return False
 
     def blockchain_loaded(self):
@@ -102,7 +98,7 @@ class SQLog(object):
         
         url = "http://127.0.0.1:" + self.config.get("general", "api_port") + "/api/loader/status"
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
         except Exception as e:
             log = "Could not fetch node status. Reason: %s" % e
@@ -173,7 +169,7 @@ class SQLog(object):
         for ip in ips.split():
             url = "http://" + str(ip) + ":" + self.config.get("general", "api_port") + "/api/blocks/getHeight"
             try:
-                http_req = requests.get(url)
+                http_req = requests.get(url, timeout=2)
                 res = http_req.json()
             except Exception as e:
                 return None
@@ -196,16 +192,16 @@ class SQLog(object):
             return True
         return False
 
-    def syncing(self):
+    def syncing(self, ip):
 
         """ Return values: 
             height: as integer on success
             None: if no result is returned
             False: Exception """
 
-        url = 'http://127.0.0.1:' + (self.config.get("general", "api_port")) + '/api/loader/status/sync'
+        url = 'http://' + str(ip) + ':' + (self.config.get("general", "api_port")) + '/api/loader/status/sync'
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
             if 'success' in res and res['success']:
                 if res['syncing'] == True:
@@ -223,12 +219,24 @@ class SQLog(object):
 
         url = 'http://127.0.0.1:' + (self.config.get("general", "api_port")) + '/api/blocks/getHeight'
         try:
-            http_req = requests.get(url)
+            http_req = requests.get(url, timeout=2)
             res = http_req.json()
             if 'success' in res and res['success']:
                 height = res['height']
                 return height
         except Exception as e:
+            return None
+        return False
+
+    def ping(self, ip):
+        try:
+            p = subprocess.Popen(["/bin/ping", "-c2", "-W2", ip], stdout=subprocess.PIPE, shell=False)
+            (output, err) = p.communicate()
+            proc_status = p.wait()
+            if proc_status == 0:
+                return True
+        except Exception as e:
+            print e
             return None
         return False
 
@@ -250,24 +258,22 @@ class SQLog(object):
             url = 'http://' + self.config.get("failover", "primary_node") + ":" + (self.config.get("general", "api_port")) \
                 + '/api/loader/status/sync'
             try:
-                http_req = requests.get(url)
+                http_req = requests.get(url, timeout=2)
                 res = http_req.json()
                 if 'success' in res and res['success'] == True and 'consensus' in res:
                     primary_broadhash_consensus = int(res['consensus'])
             except Exception as e:
-                print e
-                return None
+                return False
 
             url = 'http://' + self.config.get("failover", "secondary_node") + ":" + (self.config.get("general", "api_port")) \
                 + '/api/loader/status/sync'
             try:
-                http_req = requests.get(url)
+                http_req = requests.get(url, timeout=2)
                 res = http_req.json()
                 if 'success' in res and res['success'] == True and 'consensus' in res:
                     secondary_broadhash_consensus = int(res['consensus'])
             except Exception as e:
-                print e
-                return None
+                return False
 
             if (primary_broadhash_consensus < secondary_broadhash_consensus):
                 return True
@@ -285,8 +291,9 @@ class SQLog(object):
 
         """ Rebuilding blockchain, current block height: 1 """
         try:
-            sql = 'SELECT * FROM logs WHERE log_string like \'%Rebuilding blockchain, current block height%\'' + \
-                    'AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-30 seconds\'))) < datetime ORDER BY datetime DESC LIMIT 1'
+            sql = 'SELECT * FROM logs WHERE log_string like \'%Rebuilding blockchain, current block height%\' OR log_string like \'Blocks#getIdSequence error\'' + \
+                    'OR log_string like \'%Error%native%\' AND (SELECT strftime(\'%Y-%m-%d %H:%M:%S\', datetime(\'now\', \'-60 seconds\')))' + \
+                    '< datetime ORDER BY datetime DESC LIMIT 1'
             self.conn_db = sqlite3.connect((self.config.get("general", "sqlog_db")))
             self.c = self.conn_db.cursor()
             self.c.execute(sql)
@@ -322,21 +329,28 @@ class SQLog(object):
 
             """ Enable forging on primary OR secondary node. If forging is already enabled, do it anyway just to be safe. """
             url = 'http://' + str(ip_active) + ':' + (self.config.get("general", "api_port")) + '/api/delegates/forging/enable'
-            r = requests.post(url, data=json.dumps(data), headers=headers)
+            r = requests.post(url, data=json.dumps(data), headers=headers, timeout=4)
             res = r.json()
 
             if 'success' in res and res['success'] == True:
                 log = "Forging enabled on node: %s" % str(ip_active)
                 self.logger(log)
+            else:
+                log = "Could not enable forging on node: %s. API reachable?" % ip_active
+                self.logger(log)
 
             url = 'http://' + str(ip_inactive) + ':' + (self.config.get("general", "api_port")) + '/api/delegates/forging/disable'
-            r = requests.post(url, data=json.dumps(data), headers=headers)
+            r = requests.post(url, data=json.dumps(data), headers=headers, timeout=4)
             res = r.json()
+
             if 'success' in res and res['success'] == True:
                 log = "Forging disabled on node: %s" % str(ip_inactive)
                 self.logger(log)
+            else:
+                log = "Could not disable forging on node: %s. API reachable?" % ip_inactive
+                self.logger(log)
         except Exception as e:
-            log = "Could not commit failover. Reason: %s" % e
+            log = "Could not commit failover. Remote node not reachable."
             self.logger(log)
             return None
         return True
@@ -386,8 +400,3 @@ class SQLog(object):
         except Exception as e:
             self.logger("Could not fetch number of lines parsed for statistics.")
         return True
-
-    def mail(self):
-
-        if self.forging(self.config.get("notifications", "enable_email")):
-            import smtplib        

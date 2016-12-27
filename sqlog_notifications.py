@@ -29,6 +29,7 @@ class Email(object):
             smtp.sendmail(self.config.get("notifications", "email_address"), 
                           self.config.get("notifications", "email_address"),
                           str(message))
+            self.logic.logger("Notification E-mail sent.")
         except Exception as e:
             log = "Could not send E-mail notification. Reason: %s" % e
             self.logic.logger(log)
