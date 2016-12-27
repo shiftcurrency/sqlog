@@ -32,38 +32,59 @@ SQLog enables high availability for LISK/SHIFT nodes. It can handle the followin
 
 ### Secondary or primary node is down.
 [2016-12-27 10:29:06] [INFO] Primary node is DOWN (both API and ICMP), forcing forging on secondary node.
+
 [2016-12-27 10:29:07] [INFO] Forging enabled on node: 108.61.171.146
 
 ### Fork type 3 detected (no wait for low blockheight, the rebuild is executed immediately.
 [2016-12-27 10:39:04] [INFO] Fork type 3 detected, rebuilding blockchain.
+
 [2016-12-27 10:39:05] [INFO] Notification E-mail sent.
+
 ######################################################################## 100,0%
+
 [2016-12-27 10:40:07] [INFO] Blockchain rebuild finished.
+
 [2016-12-27 10:40:27] [INFO] Blockchain is syncing...
+
 [2016-12-27 10:57:05] [INFO] Primary node OK, taking over.
+
 [2016-12-27 10:57:05] [INFO] Forging enabled on node: 45.76.5.66
+
 [2016-12-27 10:57:05] [INFO] Forging disabled on node: 108.61.171.146
 
 ### Corrupted blockchain database. Rebuild is executed on multiple types of corruption.
 [2016-12-27 11:00:06] [INFO] Faulty database detected, rebuilding blockchain.
+
 [2016-12-27 11:00:06] [INFO] Forging enabled on node: 108.61.171.146
+
 [2016-12-27 11:00:06] [INFO] Forging disabled on node: 45.76.5.66
+
 [2016-12-27 11:00:07] [INFO] Notification E-mail sent.
+
 ######################################################################## 100,0%
+
 [2016-12-27 11:01:07] [INFO] Blockchain rebuild finished.
 
 ### Blockchain height is low compared to the network consensus height.
 [2016-12-27 11:05:14] [INFO] Own blockheight is 20 blocks low compared to consensus, rebuilding blockchain.
+
 [2016-12-27 11:05:15] [INFO] Notification E-mail sent.
+
 ######################################################################## 100.0%
+
 [2016-12-27 11:06:06] [INFO] Blockchain rebuild finished.
 
 ### Broadhash consensus check. Always choose the node with the highest consensus.
 [2016-12-27 10:57:05] [INFO] Primary node OK, taking over.
+
 [2016-12-27 10:57:05] [INFO] Forging enabled on node: 45.76.5.66
+
 [2016-12-27 10:57:05] [INFO] Forging disabled on node: 108.61.171.146
+
 [2016-12-27 10:58:24] [INFO] Broadhash consensus on secondary node is higher than on primary node. Commit failover.
+
 [2016-12-27 10:58:24] [INFO] Forging enabled on node: 108.61.171.146
+
 [2016-12-27 10:58:24] [INFO] Forging disabled on node: 45.76.5.66
 
 ## The End
